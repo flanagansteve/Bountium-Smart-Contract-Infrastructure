@@ -1,6 +1,6 @@
 pragma solidity ^0.5.1;
 
-import "./StringExamples.sol";
+import "./StringBasedMarkets.sol";
 
 // This is an assessor where the market author sets an API that all jobs post
 // relevant tests to (example: test ci/cl for coding jobs!), and the assessment

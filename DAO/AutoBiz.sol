@@ -1,7 +1,7 @@
 pragma solidity ^0.5.1;
 
-import "./Assessors.sol";
-import "./SafeMath.sol";
+import "../markets/AssessorFramework.sol";
+import "../standards/SafeMath.sol";
 
 contract AutoBiz {
 

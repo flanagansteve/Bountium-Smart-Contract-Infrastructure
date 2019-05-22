@@ -1,6 +1,6 @@
 pragma solidity ^0.5.1;
 
-import "./Assessors.sol";
+import "../markets/AssessorFramework.sol";
 
 // TODO add search by name, purpose, and evaluator
 // a registrar of bounty markets. this will make it easier for
