@@ -1,6 +1,7 @@
 pragma solidity ^0.5.1;
 
 import "./StringBasedMarkets.sol";
+import "../util/StringManipulation.sol";
 
 // This is an assessor where the market author sets an API that all jobs post
 // relevant tests to (example: test ci/cl for coding jobs!), and the assessment
@@ -39,24 +40,32 @@ contract SharedAPIAssessor is JSONInstruction {
   // so workers should be wary and make a call on the trustworthiness of the
   // provided API.
 contract SpecificAPIAssessor is JSONInstruction {
-  // TODO consider tracking how often an API provider has lead to a successfully
-  // assessed tx to display trustfulness to propsective workers AND to suggest
-  // popular APIs to posters
-  // TODO perhaps make a registrar of APIs and tag them by category???
-  string public apiUrl;
-  bool apiSet;
+
+  using strings for *;
 
   // Override: require the data a user sends to have an api field
+  // Note: This implementation requires that a post contains a field specifically
+  // named 'apiUrl', case-sensitive, to be used as the oracle for assessing this job
   function submit(bytes memory data) public returns (bool received, uint bountyID) {
-    // TODO: convert to json string, require(has apiField)
-    // then, same as always:
-    super();
+    // Ensure that the submitted post has an apiUrl
+    string memory posting = string(data);
+    // [I know that this chaining is gross but its difficult to break it out
+    // into multiple lines while also converting the solidity 0.4.x examples -
+    // someone else can feel free to do it if it bothers them]
+    require(!posting.toSlice().copy().find("apiUrl".toSlice()).empty());
+    // If so, accept it
+    reqs.push(JSONReq(posting, false, msg.sender));
+    emit RequestReceived(reqs.length - 1, msg.sender);
+    return (true, reqs.length - 1);
   }
 
   // Override: get the api associated with this job and request to it with
   // data:claim to make the assessment
   function assess(uint bountyID, bytes memory claim) internal view returns (bool correct) {
-    // TODO get api field of bounties[bountyID]
+    // get api field of bounties[bountyID]
+    // More gross chaining - i wanna vomit
+    string memory apiUrl = reqs[bountyID].instructionsObject.toSlice().copy().find("apiUrl".toSlice()).toString();
+    // TODO cut off api url at next } or ,
     // TODO make a request to api field with data:claim, return response
   }
 }
