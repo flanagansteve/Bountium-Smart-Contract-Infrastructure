@@ -17,7 +17,7 @@ contract AutoBiz {
     bool callsDividend;
     // whether this stakeholder can dilute the equity pool
     bool canDilute;
-    // whether this user can bestow priveleges
+    // whether this user can bestow privileges
     bool canBestow;
     // can modify/release a product
     bool canModifyCatalogue;
