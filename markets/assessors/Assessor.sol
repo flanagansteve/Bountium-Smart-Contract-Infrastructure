@@ -1,5 +1,6 @@
 pragma solidity ^0.5.1;
-// The following is the AssessmentOracle frameworks. Each smart contract is an
+
+// The following is the Assessor framework. Each smart contract is an
 // entity to which people can make requests, and to which people can claim to
 // have fulfilled the request by supplying evidence. This evidence is then assessed
 // in any number of ways:
@@ -11,8 +12,8 @@ pragma solidity ^0.5.1;
 //    - Could have the claimant submit info only a successful claimant could have,
 //    such as the time of day the event should come to pass (prior to it passing)
 
-interface AssessmentOracle {
-    
+interface Assessor {
+
   event RequestReceived(uint bountyID, address sender);
 
   // a way to submit arbitrary data for an available request
@@ -26,8 +27,8 @@ interface AssessmentOracle {
 
   // View info and specifics about a bounty here. To keep this interface
   // data-type agnostic, we return the raw bytes of the bounty info, and
-  // a string representing what data type the bountyInfo is - the strings 
-  // representing each type should correspond to solidity keywords, ie 
+  // a string representing what data type the bountyInfo is - the strings
+  // representing each type should correspond to solidity keywords, ie
   // "uint", "string", etc.
   function viewBountyInfo(uint bountyID) external view returns (bytes memory bountyInfo, string memory infoType);
 
@@ -38,41 +39,8 @@ interface AssessmentOracle {
 
 }
 
-contract AssessmentIncentiviser {
-
-  // the assessor the incentiviser escrows payment based on
-  AssessmentOracle public oracle;
-  // a mapping from bountyIDs to rewards, in wei
-  mapping(uint=>uint) public bounties;
-
-  // TODO check that this is really an ao
-  constructor(AssessmentOracle _oracle) public payable {
-    oracle = _oracle;
-  }
-
-  function settle(uint bountyID) public returns (bool success) {
-    (bool completed, address payable completer) = oracle.completed(bountyID);
-    if(!completed)
-      return false;
-    completer.transfer(bounties[bountyID]);
-    bounties[bountyID] = 0;
-    return true;
-  }
-
-  // For funding completion of the task
-  function fund(uint bountyID) public payable {
-    bounties[bountyID] += msg.value;
-  }
-
-  // revert random eth
-  function () external payable {
-    revert();
-  }
-
-}
-
-// A silly example of one such market - guessing numbers for bounties
-contract GuessMyNum is AssessmentOracle {
+// A silly example of one such assessor - guessing numbers for bounties
+contract GuessMyNum is Assessor {
 
   struct Secret {
     uint num;
@@ -120,10 +88,9 @@ contract GuessMyNum is AssessmentOracle {
     assembly { mstore(add(b, 32), x) }
     return b;
   }
-  
+
   function viewBountyInfo(uint bountyID) public view returns(bytes memory bountyInfo, string memory infoType) {
     return (uintToBytes(secrets[bountyID].num), "uint");
   }
 
 }
-

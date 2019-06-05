@@ -1,7 +1,7 @@
 pragma solidity ^0.5.1;
 
-import "./StringBasedMarkets.sol";
-import "../util/StringManipulation.sol";
+import "./StringBasedAssessors.sol";
+import "../../util/StringManipulation.sol";
 
 // This is an assessor where the market author sets an API that all jobs post
 // relevant tests to (example: test ci/cl for coding jobs!), and the assessment
@@ -67,5 +67,10 @@ contract SpecificAPIAssessor is JSONInstruction {
     string memory apiUrl = reqs[bountyID].instructionsObject.toSlice().copy().find("apiUrl".toSlice()).toString();
     // TODO cut off api url at next } or ,
     // TODO make a request to api field with data:claim, return response
+      // But: how do you generate a request to the API ~from~ a contract?
+      // is that possible? through oraclize perhaps?
+      // one idea: instead of having the contract itself generating the request,
+      // have the claimant make the request and supply the response output as
+      // their claim - and have it signed by the api to prevent just faking output
   }
 }
