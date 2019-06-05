@@ -1,6 +1,6 @@
 pragma solidity ^0.5.1;
 
-import "./assessors/Assessor.sol";
+import "./Assessor.sol";
 
 // Example simple string assessor. Currently trustful - assess() does nothing
 // Users can submit a request with a string of their instructions

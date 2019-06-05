@@ -9,7 +9,7 @@ contract AssessedMarket {
   // a mapping from bountyIDs to rewards, in wei
   mapping(uint=>uint) public bounties;
 
-  // TODO check that this is really an ao
+  // TODO check that this is really an assessor
   constructor(Assessor _oracle) public payable {
     oracle = _oracle;
   }
