@@ -1,5 +1,6 @@
 pragma solidity ^0.5.1;
 
+import "../markets/AssessedMarket.sol";
 import "../markets/assessors/Assessor.sol";
 import "../standards/SafeMath.sol";
 
@@ -44,7 +45,7 @@ contract AutoBiz {
     uint price;
     uint ordersReceived;
     uint supplyChainLength;
-    AssessmentIncentiviser[] supplyChain;
+    AssessedMarket[] supplyChain;
     uint[] fees;
   }
   // the products in the catalogue, ordered by productID
@@ -69,7 +70,7 @@ contract AutoBiz {
   // an individual step in the supply chain
   struct SupplyStep {
     string description;
-    AssessmentIncentiviser incentiviser;
+    AssessedMarket incentiviser;
     uint fee;
   }
   mapping(uint=>SupplyStep[]) public supplyChains;
@@ -202,7 +203,7 @@ contract AutoBiz {
   function releaseProduct(string memory name, uint price) public returns (bool success) {
     require(contains(ownersRegistered, msg.sender));
     require(owners[msg.sender].canModifyCatalogue);
-    catalogue.push(Product(name, "No description set", defaultImg, false, price, 0, 0, new AssessmentIncentiviser[](0), new uint[](0)));
+    catalogue.push(Product(name, "No description set", defaultImg, false, price, 0, 0, new AssessedMarket[](0), new uint[](0)));
     emit ProductReleased(msg.sender, catalogue.length - 1);
     return true;
   }
@@ -254,7 +255,7 @@ contract AutoBiz {
 
   // add a step in the supply chain to the product
   // TODO we should ensure the addr passed to this is an incentiviser
-  function addSupplyStep(uint product, AssessmentIncentiviser evaluator, uint fee) public returns (bool success) {
+  function addSupplyStep(uint product, AssessedMarket evaluator, uint fee) public returns (bool success) {
     // 1. require auth
     require(contains(ownersRegistered, msg.sender));
     require(owners[msg.sender].canModifyCatalogue);
@@ -278,7 +279,7 @@ contract AutoBiz {
   // params: productID, and info about the customer that are needed to give
   // them the product - an email addr or physical addr, for example
   // Presumes: Last step in a product's supply chain arr is the delivery one
-  function order(uint product, string memory customerInfo) public payable returns (bool orderPlaced, AssessmentOracle delivered, uint orderID) {
+  function order(uint product, string memory customerInfo) public payable returns (bool orderPlaced, Assessor delivered, uint orderID) {
     // 1. require sufficient payment
     require(msg.value >= catalogue[product].price);
     // 2. require product.forSale
@@ -320,7 +321,7 @@ contract AutoBiz {
     return (
       true,
       // return a dummy assessment oracle to satisfy return stmt
-      AssessmentOracle(ownersRegistered[0]),
+      Assessor(ownersRegistered[0]),
       catalogue[product].ordersReceived - 1
     );
   }
