@@ -1,5 +1,7 @@
 pragma solidity ^0.5.1;
 
+import "./assessors/Assessor.sol";
+
 // The following is a contract for establishing a marketplace that employs
 // an Assessor as detailed in Assessor.sol
 contract AssessedMarket {
