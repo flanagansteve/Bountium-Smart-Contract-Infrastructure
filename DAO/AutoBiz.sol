@@ -24,12 +24,9 @@ contract AutoBiz {
     // (The authority of the board is left to the user)
     bool board;
   }
+  uint public totalShares;
   // the owners
   mapping(address=>StakeHolder) public owners;
-  // equity currently taken up, in shares
-  uint public equityTaken;
-  // total share count
-  uint public totalShares;
   // addrs recorded
   address payable[] public ownersRegistered;
   event OwnershipModified (address byWhom);
@@ -79,17 +76,16 @@ contract AutoBiz {
     AssessedMarket incentiviser;
     uint fee;
   }
+  // array of supply chains for each productID
   mapping(uint=>SupplyStep[]) public supplyChains;
 
   // default image url
   string defaultImg = "https://www.digitalcitizen.life/sites/default/files/styles/lst_small/public/featured/2016-08/photo_gallery.jpg";
 
   // The constructor founding this business
-  constructor(uint equityToSender, uint _totalShares, string memory _name) public payable {
-    require(equityToSender <= _totalShares);
-    owners[msg.sender] = StakeHolder(equityToSender, true, true, true, true, true);
-    equityTaken = equityToSender;
-    totalShares = _totalShares;
+  constructor(string memory _name) public payable {
+    owners[msg.sender] = StakeHolder(1, true, true, true, true, true);
+    totalShares = 1;
     biz_name = _name;
     ownersRegistered.push(msg.sender);
   }
@@ -109,25 +105,9 @@ contract AutoBiz {
     require(contains(ownersRegistered, msg.sender));
     require(owners[msg.sender].canDilute);
     totalShares+=stake;
-    equityTaken+=stake;
     giveShares(stake, recipient);
     emit OwnershipModified(msg.sender);
     return true;
-  }
-
-  // gives a new stake, presuming not all shares have been given out
-  function giveUnallocatedShares(uint shares, address payable recipient) public returns(bool) {
-    require(contains(ownersRegistered, msg.sender));
-    // giving unallocated is in effect equivalent to diluting
-    require(owners[msg.sender].canDilute);
-    if (equityTaken + shares < totalShares) {
-      equityTaken+=shares;
-      giveShares(shares, recipient);
-      emit OwnershipModified(msg.sender);
-      return true;
-    } else {
-      return false;
-    }
   }
 
   // gives the passed address some shares
@@ -191,7 +171,7 @@ contract AutoBiz {
   function payDividend(uint amt) public returns (bool) {
     require(contains(ownersRegistered, msg.sender));
     require(owners[msg.sender].callsDividend);
-    require (address(this).balance >= (amt * equityTaken));
+    require (address(this).balance >= (amt * totalShares));
     for (uint i = 0; i <ownersRegistered.length; i++)
       ownersRegistered[i].transfer(amt * owners[ownersRegistered[i]].stake);
     return true;
