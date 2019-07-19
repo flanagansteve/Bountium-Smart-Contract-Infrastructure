@@ -1,10 +1,10 @@
 pragma solidity ^0.5.1;
 
-import "../markets/AssessedMarket.sol";
-import "../markets/assessors/Assessor.sol";
-import "../standards/SafeMath.sol";
+import "./AssessedMarket.sol";
+import "./Assessor.sol";
+import "./SafeMath.sol";
 
-contract AutoBiz {
+contract DumbBiz {
 
   using SafeMath for uint;
   string public biz_name;
@@ -20,9 +20,6 @@ contract AutoBiz {
     bool canBestow;
     // can modify/release a product
     bool canModifyCatalogue;
-    // whether this stakeholder is on the board
-    // (The authority of the board is left to the user)
-    bool board;
   }
   uint public totalShares;
   // the owners
@@ -30,6 +27,107 @@ contract AutoBiz {
   // addrs recorded
   address payable[] public ownersRegistered;
   event OwnershipModified (address byWhom);
+
+  // The constructor founding this business
+  constructor(string memory _name) public payable {
+    owners[msg.sender] = StakeHolder(1, true, true, true, true);
+    totalShares = 1;
+    biz_name = _name;
+    ownersRegistered.push(msg.sender);
+  }
+
+  // Transfers msg.sender's shares.
+  function transferShares(uint sharesToTransfer, address payable recipient) public returns (bool) {
+    require (contains(ownersRegistered, msg.sender));
+    require (owners[msg.sender].stake >= sharesToTransfer);
+    owners[msg.sender].stake -= sharesToTransfer;
+    giveShares(sharesToTransfer, recipient);
+    emit OwnershipModified(msg.sender);
+    return true;
+  }
+
+  // Dilutes the equity pool by adding this new recipient
+  function dilute(uint stake, address payable recipient) public returns (bool) {
+    require(contains(ownersRegistered, msg.sender));
+    require(owners[msg.sender].canDilute);
+    totalShares+=stake;
+    giveShares(stake, recipient);
+    emit OwnershipModified(msg.sender);
+    return true;
+  }
+
+  // gives the passed address some shares
+  // if new owner, gives no permissions by default - these can be bestowed in a
+  // subsequent function call
+  function giveShares(uint amt, address payable rec) private {
+    if (!contains(ownersRegistered, rec)) {
+      owners[rec] = StakeHolder(amt, false, false, false, false);
+      ownersRegistered.push(rec);
+    } else {
+      owners[rec].stake += amt;
+    }
+  }
+
+  // give a permission out of the list:
+  // 1. calling dividend
+  // 2. diluting shares
+  // 3. can bestow permissions to others
+  // 4. can modify the catalogue
+  function bestowPermission(address bestowee, uint which) public returns(bool success) {
+    require(contains(ownersRegistered, msg.sender));
+    require(owners[msg.sender].canBestow);
+    require(contains(ownersRegistered, bestowee));
+    if (which == 1)
+      owners[bestowee].callsDividend = true;
+    else if (which == 2)
+      owners[bestowee].canDilute = true;
+    else if (which == 3)
+      owners[bestowee].canBestow = true;
+    else if (which == 4)
+      owners[bestowee].canModifyCatalogue = true;
+    else
+      // must be a mistake or something
+      return false;
+    emit OwnershipModified(msg.sender);
+    return true;
+  }
+
+  // tells whether an array contains the passed address. wish this was builtin
+  function contains(address payable[] memory arr, address x) private pure returns(bool) {
+    for (uint i = 0; i < arr.length; i++)
+      if (arr[i] == x)
+        return true;
+    return false;
+  }
+
+  // tells whether this address is an owner
+  function isOwner(address addr) public view returns (bool) {
+    return contains(ownersRegistered, addr);
+  }
+
+  // Pays out a dividend to owners, in wei, in terms of wei-per-share
+  // (out of TOTAL shares, not just shares already claimed)
+  // Presumes:
+  //   dividend >= 1 wei per share
+  //   caller can calculate dividend per share this way (i can make a calc
+  //   for this down the road)
+  function payDividend(uint amt) public returns (bool) {
+    require(contains(ownersRegistered, msg.sender));
+    require(owners[msg.sender].callsDividend);
+    require (address(this).balance >= (amt * totalShares));
+    for (uint i = 0; i <ownersRegistered.length; i++)
+      ownersRegistered[i].transfer(amt * owners[ownersRegistered[i]].stake);
+    return true;
+  }
+
+  // send ETH to give the biz capital
+  function () external { }
+
+}
+
+contract SmartBiz is DumbBiz {
+
+  using SafeMath for uint;
 
   // a product
   // TODO might it make sense to format all the fields of a product as a
@@ -82,99 +180,12 @@ contract AutoBiz {
   // default image url
   string defaultImg = "https://www.digitalcitizen.life/sites/default/files/styles/lst_small/public/featured/2016-08/photo_gallery.jpg";
 
-  // The constructor founding this business
-  constructor(string memory _name) public payable {
-    owners[msg.sender] = StakeHolder(1, true, true, true, true, true);
-    totalShares = 1;
-    biz_name = _name;
-    ownersRegistered.push(msg.sender);
-  }
-
-  // Transfers msg.sender's shares.
-  function transferShares(uint sharesToTransfer, address payable recipient) public returns (bool) {
-    require (contains(ownersRegistered, msg.sender));
-    require (owners[msg.sender].stake >= sharesToTransfer);
-    owners[msg.sender].stake -= sharesToTransfer;
-    giveShares(sharesToTransfer, recipient);
-    emit OwnershipModified(msg.sender);
-    return true;
-  }
-
-  // Dilutes the equity pool by adding this new recipient
-  function dilute(uint stake, address payable recipient) public returns (bool) {
-    require(contains(ownersRegistered, msg.sender));
-    require(owners[msg.sender].canDilute);
-    totalShares+=stake;
-    giveShares(stake, recipient);
-    emit OwnershipModified(msg.sender);
-    return true;
-  }
-
-  // gives the passed address some shares
-  // if new owner, gives no permissions by default - these can be bestowed in a
-  // subsequent function call
-  function giveShares(uint amt, address payable rec) private {
-    if (!contains(ownersRegistered, rec)) {
-      owners[rec] = StakeHolder(amt, false, false, false, false, false);
-      ownersRegistered.push(rec);
-    } else {
-      owners[rec].stake += amt;
-    }
-  }
-
-  // give a permission out of the list:
-  // 1. calling dividend
-  // 2. diluting shares
-  // 3. can bestow permissions to others
-  // 4. can modify the catalogue
-  // 5. is a board member
-  function bestowPermission(address bestowee, uint which) public returns(bool success) {
-    require(contains(ownersRegistered, msg.sender));
-    require(owners[msg.sender].canBestow);
-    require(contains(ownersRegistered, bestowee));
-    if (which == 1)
-      owners[bestowee].callsDividend = true;
-    else if (which == 2)
-      owners[bestowee].canDilute = true;
-    else if (which == 3)
-      owners[bestowee].canBestow = true;
-    else if (which == 4)
-      owners[bestowee].canModifyCatalogue = true;
-    else if (which == 5)
-      owners[bestowee].board = true;
-    else
-      // must be a mistake or something
-      return false;
-    emit OwnershipModified(msg.sender);
-    return true;
-  }
-
   // tells whether an array contains the passed address. wish this was builtin
   function contains(address payable[] memory arr, address x) private pure returns(bool) {
     for (uint i = 0; i < arr.length; i++)
       if (arr[i] == x)
         return true;
     return false;
-  }
-
-  // tells whether this address is an owner
-  function isOwner(address addr) public view returns (bool) {
-    return contains(ownersRegistered, addr);
-  }
-
-  // Pays out a dividend to owners, in wei, in terms of wei-per-share
-  // (out of TOTAL shares, not just shares already claimed)
-  // Presumes:
-  //   dividend >= 1 wei per share
-  //   caller can calculate dividend per share this way (i can make a calc
-  //   for this down the road)
-  function payDividend(uint amt) public returns (bool) {
-    require(contains(ownersRegistered, msg.sender));
-    require(owners[msg.sender].callsDividend);
-    require (address(this).balance >= (amt * totalShares));
-    for (uint i = 0; i <ownersRegistered.length; i++)
-      ownersRegistered[i].transfer(amt * owners[ownersRegistered[i]].stake);
-    return true;
   }
 
   // Release a product for the business to sell
@@ -233,7 +244,7 @@ contract AutoBiz {
 
   // add a step in the supply chain to the product
   // TODO we should ensure the addr passed to this is an incentiviser
-  function addSupplyStep(uint product, AssessedMarket evaluator, uint fee) public returns (bool success) {
+  function addSupplyStep(uint product, AssessedMarket evaluator, uint fee, string memory instructions) public returns (bool success) {
     // 1. require auth
     require(contains(ownersRegistered, msg.sender));
     require(owners[msg.sender].canModifyCatalogue);
@@ -248,7 +259,7 @@ contract AutoBiz {
     catalogue[product].supplyChainLength++;
     // 4. add to list of supply chains
     // TODO take in string description of step
-    supplyChains[product].push(SupplyStep("", evaluator, fee));
+    supplyChains[product].push(SupplyStep(instructions, evaluator, fee));
     emit ProductModified(msg.sender, product);
     return true;
   }
@@ -280,9 +291,10 @@ contract AutoBiz {
     orders[product].push(Order(false, false, deliveryInfo, chosenOptions, 0, new uint[](0)));
     if (catalogue[product].supplyChain.length > 0) {
       for (uint i = 0; i < catalogue[product].supplyChain.length - 1; i++) {
+        string memory thisStep = concatStrings(chosenOptions, supplyChains[product][i].description);
         // a. Submit new supply req to supplyChain[i].oracle()
         (bool received, uint bountyID) = catalogue[product].supplyChain[i].oracle().submit(
-          bytes32ToBytes(stringToBytes(chosenOptions))
+          bytes32ToBytes(stringToBytes(thisStep))
         );
         // b. save this supply request ID to this order
         orders[product][catalogue[product].ordersReceived].supplyChainBountyIDs.push(bountyID);
@@ -389,6 +401,18 @@ contract AutoBiz {
     b = new bytes(32);
     assembly { mstore(add(b, 32), b32) }
     return b;
+  }
+
+  // public for debugging, will be internal
+  function concatStrings(string memory _a, string memory _b) public pure returns (string memory xy) {
+    bytes memory _ba = bytes(_a);
+    bytes memory _bb = bytes(_b);
+    string memory abcde = new string(_ba.length + _bb.length);
+    bytes memory babcde = bytes(abcde);
+    uint k = 0;
+    for (uint i = 0; i < _ba.length; i++) babcde[k++] = _ba[i];
+    for (uint i = 0; i < _bb.length; i++) babcde[k++] = _bb[i];
+    return string(babcde);
   }
 
 }
