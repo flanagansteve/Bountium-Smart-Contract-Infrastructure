@@ -1,8 +1,8 @@
 pragma solidity ^0.5.1;
 
-import "./AssessedMarket.sol";
-import "./Assessor.sol";
-import "./SafeMath.sol";
+import "../markets/AssessedMarket.sol";
+import "../markets/assessors/Assessor.sol";
+import "../standards/SafeMath.sol";
 
 contract DumbBiz {
 
