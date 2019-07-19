@@ -58,12 +58,7 @@ contract SmartBiz is DumbBiz {
   // default image url
   string defaultImg = "https://www.digitalcitizen.life/sites/default/files/styles/lst_small/public/featured/2016-08/photo_gallery.jpg";
 
-  constructor(string memory _name) public payable {
-    owners[msg.sender] = StakeHolder(1, true, true, true, true);
-    totalShares = 1;
-    biz_name = _name;
-    ownersRegistered.push(msg.sender);
-  }
+  constructor(string memory _name) DumbBiz(_name) public  { }
 
   // tells whether an array contains the passed address. wish this was builtin
   function contains(address payable[] memory arr, address x) private pure returns(bool) {
