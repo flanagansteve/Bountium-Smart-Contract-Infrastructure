@@ -157,19 +157,39 @@ contract SmartBiz is DumbBiz {
   // order the product
   // params: productID, and info about the customer that are needed to give
   // them the product - an email addr or physical addr, for example
-  // Presumes: Last step in a product's supply chain arr is the delivery one
-  // TODO presumably, the customer options also impact the other supply steps -
-  // if you're manufacturing the product as a certain size in step 1, then you
-  // need to know the chosen size then. How do we automatically send chosenOptions
-  // to the appropriate steps? Sending to them all for now
   function order(uint product, string memory chosenOptions, string memory deliveryInfo) public payable returns (bool orderPlaced, Assessor delivered, uint orderID) {
     // 1. require sufficient payment
     require(msg.value >= catalogue[product].price);
     // 2. require product.forSale
     require(catalogue[product].forSale);
-    // 3. add order, place supply orders for each step in product.supplyChain, save orderIDs
+    // 3. add order, and if necessary, place supply orders for
+    // a restock each step in product.supplyChain, save orderIDs
     orders[product].push(Order(false, false, deliveryInfo, chosenOptions, 0, new uint[](0)));
-    if (catalogue[product].supplyChain.length > 0) {
+    // TODO actually try to let user set reorder conditions
+    if (true)
+      restock(product, chosenOptions, deliveryInfo);
+    // 4. increment number of orders
+    catalogue[product].ordersReceived++;
+    // 5. emit
+    emit OrderReceived(product, catalogue[product].ordersReceived - 1);
+    // 6. return true + last incentiviser in list as delivered + orderIDs
+    if (catalogue[product].supplyChain.length != 0)
+      return (
+        true,
+        catalogue[product].supplyChain[catalogue[product].supplyChain.length - 1].oracle(),
+        catalogue[product].ordersReceived - 1
+      );
+    return (
+      true,
+      // return a dummy assessment oracle to satisfy return stmt
+      Assessor(ownersRegistered[0]),
+      catalogue[product].ordersReceived - 1
+    );
+  }
+
+  // Presumes: Last step in a product's supply chain arr is the delivery one
+  function restock(uint product, string memory chosenOptions, string memory deliveryInfo) internal {
+   if (catalogue[product].supplyChain.length > 0) {
       for (uint i = 0; i < catalogue[product].supplyChain.length - 1; i++) {
         string memory thisStep = concatStrings(chosenOptions, supplyChains[product][i].description);
         // a. Submit new supply req to supplyChain[i].oracle()
@@ -190,23 +210,6 @@ contract SmartBiz is DumbBiz {
         catalogue[product].supplyChain.length - 1
       ].fund.value(catalogue[product].fees[catalogue[product].fees.length - 1])(deliveryID);
     }
-    // 4. increment number of orders
-    catalogue[product].ordersReceived++;
-    // 5. emit
-    emit OrderReceived(product, catalogue[product].ordersReceived - 1);
-    // 6. return true + last incentiviser in list as delivered + orderIDs
-    if (catalogue[product].supplyChain.length != 0)
-      return (
-        true,
-        catalogue[product].supplyChain[catalogue[product].supplyChain.length - 1].oracle(),
-        catalogue[product].ordersReceived - 1
-      );
-    return (
-      true,
-      // return a dummy assessment oracle to satisfy return stmt
-      Assessor(ownersRegistered[0]),
-      catalogue[product].ordersReceived - 1
-    );
   }
 
   // pay out all completed supply chain steps for an order
