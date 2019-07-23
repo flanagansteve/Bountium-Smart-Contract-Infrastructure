@@ -10,7 +10,7 @@ import "../markets/assessors/Assessor.sol";
 //       - further, meaning that delivery info isnt passed to bounties
 //       but tracked internally through orders[]
 //       - also means that a customer can't query for order status
-//       since not every order is being done per single unit
+//       since not every customer order generates their own bounties
 // For a version that does do per-unit and inventory-less business,
 // see InventorylessSmartBiz
 contract SmartBiz is DumbBiz {

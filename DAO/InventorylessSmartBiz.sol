@@ -4,7 +4,7 @@ import "./DumbBiz.sol";
 
 contract InventorylessSmartBiz is DumbBiz {
 
-  // In this kind of business, there are no stocked products,
+  // In a dropshipping business, there are no stocked products,
   // so we will instead let an owner set arbitrary options
   // for a product as a string, receive arbitrary chosen options
   // as a string, and place the order with those options - making this
@@ -19,13 +19,10 @@ contract InventorylessSmartBiz is DumbBiz {
     bool forSale;
     uint price;
     uint ordersReceived;
-    uint supplyChainLength;
     // This is a JSON-object string formatted as {
     //    'optionName' : [ 'option 1', 'option 2' etc]
     // }
     string orderOptions;
-    AssessedMarket[] supplyChain;
-    uint[] fees;
   }
   // the products in the catalogue, ordered by productID
   Product[] public catalogue;
@@ -37,9 +34,9 @@ contract InventorylessSmartBiz is DumbBiz {
   struct Order {
     bool complete;
     bool suppliersPaid;
-    string deliveryInfo;
-    // The customer's chosen options for stuff like size
-    string chosenOptions;
+    // The customer's chosen options for stuff like size, and
+    // at a minimum, delivery info in the deliveryInfo field
+    string orderInfo;
     uint stepsCompleted;
     // ids for various supply orders in producing the product of this specific order
     uint[] supplyChainBountyIDs;
@@ -74,7 +71,7 @@ contract InventorylessSmartBiz is DumbBiz {
   function releaseProduct(string memory name, uint price) public returns (bool success) {
     require(contains(ownersRegistered, msg.sender));
     require(owners[msg.sender].canModifyCatalogue);
-    catalogue.push(Product(name, "No description set", defaultImg, false, price, 0, 0, "", new AssessedMarket[](0), new uint[](0)));
+    catalogue.push(Product(name, "No description set", defaultImg, false, price, 0, ""));
     emit ProductReleased(msg.sender, catalogue.length - 1);
     return true;
   }
@@ -132,15 +129,10 @@ contract InventorylessSmartBiz is DumbBiz {
     require(owners[msg.sender].canModifyCatalogue);
     // 2. require total fees <= price
     uint totalFees = 0;
-    for (uint i = 0; i < catalogue[product].fees.length; i++)
-      totalFees += catalogue[product].fees[i];
+    for (uint i = 0; i < supplyChains[product].length; i++)
+      totalFees += supplyChains[product][i].fee;
     require(totalFees + fee <= catalogue[product].price);
-    // 3. add to product structs supply chain
-    catalogue[product].supplyChain.push(evaluator);
-    catalogue[product].fees.push(fee);
-    catalogue[product].supplyChainLength++;
-    // 4. add to list of supply chains
-    // TODO take in string description of step
+    // 3. add to list of supply chains
     supplyChains[product].push(SupplyStep(instructions, evaluator, fee));
     emit ProductModified(msg.sender, product);
     return true;
@@ -157,50 +149,45 @@ contract InventorylessSmartBiz is DumbBiz {
   }
 
   // order the product
-  // params: productID, and info about the customer that are needed to give
-  // them the product - an email addr or physical addr, for example
-  // Presumes: Last step in a product's supply chain arr is the delivery one
-  // TODO presumably, the customer options also impact the other supply steps -
-  // if you're manufacturing the product as a certain size in step 1, then you
-  // need to know the chosen size then. How do we automatically send chosenOptions
-  // to the appropriate steps? Sending to them all for now
-  function order(uint product, string memory chosenOptions, string memory deliveryInfo) public payable returns (bool orderPlaced, Assessor delivered, uint orderID) {
+  // params: productID - the product to buy
+  //         orderInfo - info about the customer that are needed to give
+  //                     them the product, as a JSON object. Includes config
+  //                     selection (ie picking shirt size) and delivery info
+  // Presumes:
+  //   - orderInfo is a JSON object string, with no whitespace following the
+  //   end bracket }. If this is not true, the bounty will be malformed
+  //   - similarly, presumes the instructions for each supply step are properly
+  //   formatted JSON object strings too
+  function order(uint product, string memory orderInfo) public payable returns (bool orderPlaced, Assessor delivered, uint orderID) {
     // 1. require sufficient payment
     require(msg.value >= catalogue[product].price);
     // 2. require product.forSale
     require(catalogue[product].forSale);
     // 3. add order, place supply orders for each step in product.supplyChain, save orderIDs
-    orders[product].push(Order(false, false, deliveryInfo, chosenOptions, 0, new uint[](0)));
-    if (catalogue[product].supplyChain.length > 0) {
-      for (uint i = 0; i < catalogue[product].supplyChain.length - 1; i++) {
-        string memory thisStep = concatStrings(chosenOptions, supplyChains[product][i].description);
+    //    To simplify, we give the entire order info to each supply step even if not
+    //    each one requires it.
+    orders[product].push(Order(false, false, orderInfo, 0, new uint[](0)));
+    if (supplyChains[product].length > 0) {
+      for (uint i = 0; i < supplyChains[product].length; i++) {
         // a. Submit new supply req to supplyChain[i].oracle()
-        (bool received, uint bountyID) = catalogue[product].supplyChain[i].oracle().submit(
-          bytes32ToBytes(stringToBytes(thisStep))
+        (bool received, uint bountyID) = supplyChains[product][i].incentiviser.oracle().submit(
+          bytes(craftBountyJSON(supplyChains[product][i].description, orderInfo))
         );
         // b. save this supply request ID to this order
         orders[product][catalogue[product].ordersReceived].supplyChainBountyIDs.push(bountyID);
         // c. Fund incent at supplyChain[i] with fees[i]
-        catalogue[product].supplyChain[i].fund.value(catalogue[product].fees[i])(bountyID);
+        supplyChains[product][i].incentiviser.fund.value(supplyChains[product][i].fee)(bountyID);
       }
-      // c. give last step incent the delivery info
-      (bool receivedDelivery, uint deliveryID) = catalogue[product].supplyChain[
-        catalogue[product].supplyChain.length - 1
-      ].oracle().submit(bytes32ToBytes(stringToBytes(deliveryInfo)));
-      orders[product][catalogue[product].ordersReceived].supplyChainBountyIDs.push(deliveryID);
-      catalogue[product].supplyChain[
-        catalogue[product].supplyChain.length - 1
-      ].fund.value(catalogue[product].fees[catalogue[product].fees.length - 1])(deliveryID);
     }
     // 4. increment number of orders
     catalogue[product].ordersReceived++;
     // 5. emit
     emit OrderReceived(product, catalogue[product].ordersReceived - 1);
     // 6. return true + last incentiviser in list as delivered + orderIDs
-    if (catalogue[product].supplyChain.length != 0)
+    if (supplyChains[product].length != 0)
       return (
         true,
-        catalogue[product].supplyChain[catalogue[product].supplyChain.length - 1].oracle(),
+        supplyChains[product][supplyChains[product].length - 1].incentiviser.oracle(),
         catalogue[product].ordersReceived - 1
       );
     return (
@@ -211,12 +198,30 @@ contract InventorylessSmartBiz is DumbBiz {
     );
   }
 
+  // Forms a bounty that includes high-level instructions applicable
+  // to all orders of a product that tells a supplier what to do with
+  // specific order info, and then the order specific info. For example,
+  // perhaps it could be:
+  //   { "General Instructions": "Print a shirt with logo found at
+  //                              imgur.com/abcde.jpg and deliver it
+  //                              to the listed address below",
+  //     "Order-Specific Instructions" : "48 Sutton Road, Needham, MA" }
+  function craftBountyJSON(string memory genInstr, string memory specInstr) public pure returns (string memory result) {
+    return concatStrings("{\"General Instructions\":\"",
+      concatStrings(genInstr,
+        concatStrings("\",\"Order-Specific Instructions\":\"",
+          concatStrings(specInstr, "\"}")
+        )
+      )
+    );
+  }
+
   // pay out all completed supply chain steps for an order
   function paySuppliersForOrder(uint product, uint orderID) public {
     // 1. TODO should we permission this?
     // 2. iterate through steps in supply chain, call settle for each one
-    for (uint i = 0; i < catalogue[product].supplyChain.length; i++) {
-      (bool success) = catalogue[product].supplyChain[i].settle(
+    for (uint i = 0; i < supplyChains[product].length; i++) {
+      (bool success) = supplyChains[product][i].incentiviser.settle(
         orders[product][orderID].supplyChainBountyIDs[i]
       );
       if (success)
@@ -238,9 +243,9 @@ contract InventorylessSmartBiz is DumbBiz {
       // Pro: People can't force payment to you if you don't want it?
       // Con: Inconvenient if biz owner cannot pay out to a supplier
     // 2. Iterate through orders and pay the supplier in the indicated step
-    require(catalogue[product].supplyChain.length > step);
+    require(supplyChains[product].length > step);
     for (uint i = 0; i < catalogue[product].ordersReceived; i++) {
-      (bool success) = catalogue[product].supplyChain[step].settle(
+      (bool success) = supplyChains[product][step].incentiviser.settle(
         orders[product][i].supplyChainBountyIDs[step]
       );
       // 3. TODO mark this as successful if success
@@ -249,8 +254,8 @@ contract InventorylessSmartBiz is DumbBiz {
 
   function checkOrderStatus(uint product, uint orderID) public view returns(uint stepsCompleted) {
     uint out;
-    for (uint i = 0; i < catalogue[product].supplyChain.length; i++) {
-      (bool completed, address payable completer) = catalogue[product].supplyChain[i].oracle().completed(
+    for (uint i = 0; i < supplyChains[product].length; i++) {
+      (bool completed, address payable completer) = supplyChains[product][i].incentiviser.oracle().completed(
         orders[product][orderID].supplyChainBountyIDs[i]
       );
       if (completed)
@@ -259,23 +264,6 @@ contract InventorylessSmartBiz is DumbBiz {
     return out;
   }
 
-  // public for debugging purposes, will be internal
-  // from: https://ethereum.stackexchange.com/a/9152
-  function stringToBytes(string memory source) internal pure returns (bytes32 result) {
-    bytes memory tempEmptyStringTest = bytes(source);
-    if (tempEmptyStringTest.length == 0)
-      return 0x0;
-    assembly { result := mload(add(source, 32)) }
-  }
-
-  // public for debugging, will be internal
-  function bytes32ToBytes(bytes32 b32) internal pure returns (bytes memory b) {
-    b = new bytes(32);
-    assembly { mstore(add(b, 32), b32) }
-    return b;
-  }
-
-  // public for debugging, will be internal
   function concatStrings(string memory _a, string memory _b) internal pure returns (string memory xy) {
     bytes memory _ba = bytes(_a);
     bytes memory _bb = bytes(_b);
