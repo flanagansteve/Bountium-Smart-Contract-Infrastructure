@@ -76,6 +76,22 @@ contract InventorylessSmartBiz is DumbBiz {
     return true;
   }
 
+  // Release a product with set fields
+  function releaseProduct(
+      string memory name,
+      string memory description,
+      string memory imageURL,
+      bool list,
+      uint price,
+      string memory orderOptions
+    ) public returns (bool success) {
+    require(contains(ownersRegistered, msg.sender));
+    require(owners[msg.sender].canModifyCatalogue);
+    catalogue.push(Product(name, description, imageURL, list, price, 0, orderOptions));
+    emit ProductReleased(msg.sender, catalogue.length - 1);
+    return true;
+  }
+
   // set the description for a product
   function addDescription(uint product, string memory description_) public returns (bool success) {
     require(contains(ownersRegistered, msg.sender));
@@ -145,6 +161,23 @@ contract InventorylessSmartBiz is DumbBiz {
     require(owners[msg.sender].canModifyCatalogue);
     catalogue[product].orderOptions = options;
     emit ProductModified(msg.sender, product);
+    return true;
+  }
+
+  // set all the fields of a product
+  function setProduct(
+      uint product,
+      string memory name,
+      string memory description,
+      string memory imageURL,
+      bool list,
+      uint price,
+      string memory orderOptions
+    ) public returns (bool success) {
+    require(contains(ownersRegistered, msg.sender));
+    require(owners[msg.sender].canModifyCatalogue);
+    catalogue[product] = Product(name, description, imageURL, list, price, 0, orderOptions);
+    emit ProductReleased(msg.sender, catalogue.length - 1);
     return true;
   }
 
