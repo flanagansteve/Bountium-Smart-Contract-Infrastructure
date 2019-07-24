@@ -2,6 +2,8 @@ pragma solidity ^0.5.1;
 
 import "../util/SafeMath.sol";
 
+// TODO add a method for publishing a bounty on the DAO's behalf
+// TODO update dividend to be hack safe
 contract DumbBiz {
 
   using SafeMath for uint;

@@ -1,6 +1,8 @@
 pragma solidity ^0.5.1;
 
 import "./DumbBiz.sol";
+import "../markets/AssessedMarket.sol";
+import "../markets/assessors/Assessor.sol";
 
 contract InventorylessSmartBiz is DumbBiz {
 
